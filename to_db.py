@@ -2,64 +2,66 @@ import json
 from ollama import Client
 import psycopg2
 from tqdm import tqdm
+from dotenv import load_dotenv
+import os
 
-# ---- Configurations ----
-JSON_FILE = "chunks_output.json"
+load_dotenv()
 
-PG_CONFIG = {
-    "dbname": "rag-db",
-    "user": "postgres",
-    "password": "password",
-    "host": "localhost",
-    "port": 5432,
-}
+class EmbedDocuments:
+    def __init__(self, chunks: dict) -> None:
+        self.PG_CONFIG = {
+            "dbname": os.getenv("DBNAME", "rag-db"),
+            "user": os.getenv("DB_USER"),
+            "password": os.getenv("PASSWORD"),
+            "host": os.getenv("HOST"),
+            "port": os.getenv("PORT"),
+        }
 
-OLLAMA_HOST = "http://localhost:11434"
-MODEL_NAME = "nomic-embed-text"
+        self.OLLAMA_HOST = "http://localhost:11434"
+        self.MODEL_NAME = "nomic-embed-text"
 
-# ---- Load JSON ----
-with open(JSON_FILE, "r", encoding="utf-8") as f:
-    clauses = json.load(f)
+        # ---- Load JSON ----
+        self.clauses = chunks
 
-# ---- Set up Ollama client ----
-client = Client(host=OLLAMA_HOST)
+        # ---- Set up Ollama client ----
+        self.client = Client(host=self.OLLAMA_HOST)
 
-# ---- Set up PostgreSQL ----
-conn = psycopg2.connect(**PG_CONFIG)
-cur = conn.cursor()
+        # ---- Set up PostgreSQL ----
+        self.conn = psycopg2.connect(**self.PG_CONFIG)
+        self.cur = self.conn.cursor()
 
-# ---- Insert each clause ----
-for clause in tqdm(clauses, desc="Uploading clauses"):
-    try:
-        embedding_response = client.embeddings(
-            model=MODEL_NAME,
-            prompt=clause["text"]
-        )
-        embedding = embedding_response["embedding"]
+    def upload_docs(self):
+        # ---- Insert each clause ----
+        for clause in tqdm(self.clauses, desc="Uploading clauses"):
+            try:
+                embedding_response = self.client.embeddings(
+                    model=self.MODEL_NAME,
+                    prompt=clause["text"]
+                )
+                embedding = embedding_response["embedding"]
 
-        cur.execute("""
-            INSERT INTO policy_clauses (
-                id, text, section_id, clause_id, type, source, title, embeddings
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO NOTHING;
-        """, (
-            clause["id"],
-            clause["text"],
-            clause["metadata"].get("section_id"),
-            clause["metadata"].get("clause_id"),
-            clause["metadata"].get("type"),
-            clause["metadata"].get("source"),
-            clause["metadata"].get("title"),
-            embedding
-        ))
+                self.cur.execute("""
+                    INSERT INTO policy_clauses (
+                        id, text, section_id, clause_id, type, source, title, embeddings
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING;
+                """, (
+                    clause["id"],
+                    clause["text"],
+                    clause["metadata"].get("section_id"),
+                    clause["metadata"].get("clause_id"),
+                    clause["metadata"].get("type"),
+                    clause["metadata"].get("source"),
+                    clause["metadata"].get("title"),
+                    embedding
+                ))
 
-    except Exception as e:
-        conn.rollback()  # 💥 This is the fix
-        print(f"❌ Failed to process clause {clause.get('id')}: {e}")
+            except Exception as e:
+                self.conn.rollback()
+                print(f"❌ Failed to process clause {clause.get('id')}: {e}")
 
-
-# ---- Finalize ----
-conn.commit()
-cur.close()
-conn.close()
-print("✅ All clauses processed and uploaded.")
+        # ---- Finalize ----
+        self.conn.commit()
+        self.cur.close()
+        self.conn.close()
+        print("✅ All clauses processed and uploaded.")
