@@ -3,14 +3,13 @@ import psycopg2
 import numpy as np
 from dotenv import load_dotenv
 import os
+from ollama import Client
 
 load_dotenv()
 
 
 class RagModelSearch:
     def __init__(self):
-        self.AIPIPE_URL = "https://aipipe.org/openai/v1/chat/completions"
-        self.API_KEY = os.getenv("AIPIPE_KEY")
         self.PG_CONFIG = {
             "dbname": "rag-db",
             "user": "postgres",
@@ -18,6 +17,8 @@ class RagModelSearch:
             "host": "localhost",
             "port": 5432,
         }
+        self.client = Client(host="http://localhost:11434")
+        self.model = "mistral"
 
     def get_query_embedding(self, text: str) -> list:
         res = httpx.post(
@@ -44,46 +45,27 @@ class RagModelSearch:
         return rows
 
     def generate_answer(self, context: str, question: str) -> str:
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a formal assistant answering strictly based on provided policy text. "
-                    "Respond using the same objective, third-person tone as the context. "
-                    "Use precise, factual language with specific details, numbers, and timeframes when available."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"""
+        prompt = f"""
+You are a formal assistant answering strictly based on the provided policy text.
+
 Context:
 {context}
 
-Question: {question}
+Question:
+{question}
 
 Instructions:
 - Answer only using the provided context
 - Maintain the original formal and factual tone
 - Do not make assumptions or add extra commentary
-- Respond in 1-2 sentences, citing facts precisely
+- Respond in 1-2 sentences, citing facts precisely.
 """
-            }
-        ]
-
-        response = httpx.post(
-            self.AIPIPE_URL,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.API_KEY}"
-            },
-            json={
-                "model": "gpt-3.5-turbo",
-                "messages": messages,
-                "temperature": 0.15,
-            }
+        response = self.client.generate(
+            model=self.model,
+            prompt=prompt,
+            stream=False,
         )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        return response["response"].strip()
 
     def run_rag_pipeline(self, question: str, top_k: int = 5) -> str:
         print("Generating embedding...")

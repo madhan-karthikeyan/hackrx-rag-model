@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from parser import DocumentParser
-from to_db import EmbedDocuments
-from rag_search import RagModelSearch
-from pydantic import BaseModel, HttpUrl, ValidationError
+from app.parser import DocumentParser
+from app.to_db import EmbedDocuments
+from app.rag_search import RagModelSearch
+from pydantic import BaseModel
 import httpx
 import uuid
 import os
