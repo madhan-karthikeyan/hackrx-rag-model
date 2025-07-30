@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from app.parser import DocumentParser
 from app.to_db import EmbedDocuments
@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 @app.post("/hackrx/run")
-async def rag_endpoint(body: RagRequest):
+async def rag_endpoint(body: RagRequest = Body(...)):
     start = time.time()
     try:
         async with httpx.AsyncClient() as client:

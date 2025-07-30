@@ -8,13 +8,11 @@ services:
       - "8000:8000"
     depends_on:
       - db
-      - ollama
     environment:
       DB_HOST: db
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: mydb
-      OLLAMA_HOST: http://ollama:11434
     volumes:
       - .:/app
     restart: always
@@ -31,24 +29,5 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: always
-    entrypoint: >
-      sh -c "
-        apt-get update && apt-get install -y curl && \
-        ollama serve & 
-        until curl -s http://localhost:11434; do sleep 1; done && \
-        ollama pull nomic-embed-text && \
-        tail -f /dev/null
-      "
-
-
 volumes:
   pgdata:
-  ollama_data:
