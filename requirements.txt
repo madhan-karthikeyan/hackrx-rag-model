@@ -12,3 +12,8 @@ ollama
 frontend
 dotenv
 numpy
+python-dotenv
+uuid
+transformers 
+sentence-transformers 
+torch
