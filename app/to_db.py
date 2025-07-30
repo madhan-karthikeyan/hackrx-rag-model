@@ -1,9 +1,10 @@
-import json
-from ollama import Client
+from transformers import AutoTokenizer, AutoModel
 import psycopg2
 from tqdm import tqdm
 from dotenv import load_dotenv
 import os
+import torch
+from huggingface_hub import login
 
 load_dotenv()
 
@@ -16,12 +17,11 @@ class EmbedDocuments:
             "host": os.getenv("HOST"),
             "port": os.getenv("PORT"),
         }
-
-        self.OLLAMA_HOST = "http://localhost:11434"
-        self.MODEL_NAME = "nomic-embed-text"
+        self.MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_NAME)
+        self.model = AutoModel.from_pretrained(self.MODEL_NAME)
         self.clauses = chunks
 
-        self.client = Client(host=self.OLLAMA_HOST)
         self.conn = psycopg2.connect(**self.PG_CONFIG)
         self.cur = self.conn.cursor()
 
@@ -37,7 +37,7 @@ class EmbedDocuments:
                 type TEXT,
                 source TEXT,
                 title TEXT,
-                embeddings VECTOR(768) 
+                embeddings VECTOR(384) 
             );
         """)
         self.conn.commit()
@@ -45,11 +45,12 @@ class EmbedDocuments:
     def upload_docs(self):
         for clause in tqdm(self.clauses, desc="Uploading clauses"):
             try:
-                embedding_response = self.client.embeddings(
-                    model=self.MODEL_NAME,
-                    prompt=clause["text"]
-                )
-                embedding = embedding_response["embedding"]
+                inputs = self.tokenizer(clause["text"], return_tensors="pt", truncation=True, padding=True)
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    embedding_tensor = outputs.last_hidden_state.mean(dim=1)  # average pooling
+                embedding = embedding_tensor.squeeze().tolist()
+
 
                 self.cur.execute("""
                     INSERT INTO policy_clauses (

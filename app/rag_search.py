@@ -3,6 +3,9 @@ import psycopg2
 import numpy as np
 from dotenv import load_dotenv
 import os
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
+from transformers.pipelines import pipeline
+import torch
 
 load_dotenv()
 
@@ -18,14 +21,18 @@ class RagModelSearch:
             "host": "localhost",
             "port": 5432,
         }
+        self.embed_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.embed_model_name)
+        self.embed_model = AutoModel.from_pretrained(self.embed_model_name)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.embed_model.to(self.device)
 
     def get_query_embedding(self, text: str) -> list:
-        res = httpx.post(
-            "http://localhost:11434/api/embeddings",
-            json={"model": "nomic-embed-text", "prompt": text}
-        )
-        res.raise_for_status()
-        return res.json()["embedding"]
+        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, padding=True).to(self.device)
+        with torch.no_grad():
+            outputs = self.embed_model(**inputs)
+            embedding = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().tolist()
+        return embedding
 
     def get_top_chunks(self, query_embedding, top_k=5):
         conn = psycopg2.connect(**self.PG_CONFIG)
@@ -98,3 +105,4 @@ Instructions:
         answer = self.generate_answer(context, question)
 
         return answer
+
