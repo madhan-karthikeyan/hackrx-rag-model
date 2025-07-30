@@ -19,19 +19,30 @@ class EmbedDocuments:
 
         self.OLLAMA_HOST = "http://localhost:11434"
         self.MODEL_NAME = "nomic-embed-text"
-
-        # ---- Load JSON ----
         self.clauses = chunks
 
-        # ---- Set up Ollama client ----
         self.client = Client(host=self.OLLAMA_HOST)
-
-        # ---- Set up PostgreSQL ----
         self.conn = psycopg2.connect(**self.PG_CONFIG)
         self.cur = self.conn.cursor()
 
+        self.create_table_if_not_exists()
+
+    def create_table_if_not_exists(self):
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS policy_clauses (
+                id TEXT PRIMARY KEY,
+                text TEXT,
+                section_id TEXT,
+                clause_id TEXT,
+                type TEXT,
+                source TEXT,
+                title TEXT,
+                embeddings VECTOR(768) 
+            );
+        """)
+        self.conn.commit()
+
     def upload_docs(self):
-        # ---- Insert each clause ----
         for clause in tqdm(self.clauses, desc="Uploading clauses"):
             try:
                 embedding_response = self.client.embeddings(
@@ -60,7 +71,6 @@ class EmbedDocuments:
                 self.conn.rollback()
                 print(f"❌ Failed to process clause {clause.get('id')}: {e}")
 
-        # ---- Finalize ----
         self.conn.commit()
         self.cur.close()
         self.conn.close()

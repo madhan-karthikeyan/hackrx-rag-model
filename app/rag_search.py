@@ -94,7 +94,7 @@ Instructions:
 
         context = "\n\n".join(f"{row[1]}: {row[2]}" for row in top_chunks)
 
-        print("Querying GPT-3.5-turbo via aipipe...")
+        print(f"Querying GPT-3.5-turbo via aipipe...")
         answer = self.generate_answer(context, question)
 
         return answer
