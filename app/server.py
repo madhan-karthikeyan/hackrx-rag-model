@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import httpx
 import uuid
 import os
+import time
 
 app = FastAPI()
 parser = DocumentParser()
@@ -25,6 +26,7 @@ app.add_middleware(
 
 @app.post("/hackrx/run")
 async def rag_endpoint(body: RagRequest):
+    start = time.time()
     try:
         async with httpx.AsyncClient() as client:
             doc_url = await client.get(body.documents) # pyright: ignore[reportArgumentType]
@@ -47,6 +49,7 @@ async def rag_endpoint(body: RagRequest):
         for question in body.questions:
             answer = rag.run_rag_pipeline(question)
             answers.append(answer)
+        print(f"Executed in {time.time() - start} seconds.")
         return {
             "answers": answers
         }
